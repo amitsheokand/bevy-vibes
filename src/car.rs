@@ -1,4 +1,5 @@
 use crate::*;
+use bevy_rapier3d::prelude::*;
 
 #[derive(Component)]
 pub struct Car {
@@ -6,15 +7,19 @@ pub struct Car {
     pub max_speed: f32,
     pub acceleration: f32,
     pub turn_speed: f32,
+    pub motor_force: f32,
+    pub brake_force: f32,
 }
 
 impl Default for Car {
     fn default() -> Self {
         Self {
             speed: 0.0,
-            max_speed: 20.0,
-            acceleration: 10.0,
-            turn_speed: 2.0,
+            max_speed: 25.0,
+            acceleration: 800.0,
+            turn_speed: 3.0,
+            motor_force: 15000.0,
+            brake_force: 20000.0,
         }
     }
 }
@@ -29,46 +34,62 @@ pub struct CarPlugin;
 
 impl Plugin for CarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (car_movement_system, wheel_rotation_system));
+        app.add_systems(Update, (car_physics_system, wheel_rotation_system));
     }
 }
 
-fn car_movement_system(
+fn car_physics_system(
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut query: Query<(&mut Transform, &mut Car)>,
+    mut car_query: Query<(&mut ExternalForce, &ExternalImpulse, &Transform, &mut Car, &Velocity)>,
 ) {
-    for (mut transform, mut car) in query.iter_mut() {
-        let dt = time.delta_secs();
+    for (mut force, _impulse, transform, mut car, velocity) in car_query.iter_mut() {
+        // Calculate current speed from velocity
+        let current_velocity = velocity.linvel;
+        let forward = *transform.forward();
+        car.speed = current_velocity.dot(forward);
 
-        // Handle acceleration/deceleration
+        // Reset forces each frame
+        force.force = Vec3::ZERO;
+        force.torque = Vec3::ZERO;
+
+        // Handle forward/backward movement with stronger forces
         if keyboard_input.pressed(KeyCode::ArrowUp) || keyboard_input.pressed(KeyCode::KeyW) {
-            car.speed = (car.speed + car.acceleration * dt).min(car.max_speed);
-        } else if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
-            car.speed = (car.speed - car.acceleration * dt).max(-car.max_speed * 0.5);
-        } else {
-            // Natural deceleration
-            car.speed *= 0.95;
-            if car.speed.abs() < 0.1 {
-                car.speed = 0.0;
-            }
+            let motor_force = forward * car.motor_force;
+            force.force += motor_force;
+        } 
+        
+        if keyboard_input.pressed(KeyCode::ArrowDown) || keyboard_input.pressed(KeyCode::KeyS) {
+            let brake_force = -forward * car.brake_force;
+            force.force += brake_force;
+        }
+        
+        // Apply drag/resistance when not accelerating
+        if !keyboard_input.pressed(KeyCode::ArrowUp) && !keyboard_input.pressed(KeyCode::KeyW) && 
+           !keyboard_input.pressed(KeyCode::ArrowDown) && !keyboard_input.pressed(KeyCode::KeyS) {
+            let drag = -current_velocity * 20.0; // Further reduced drag since we increased friction
+            force.force += drag;
         }
 
-        // Handle steering (only when moving)
-        if car.speed.abs() > 0.1 {
-            let turn_factor = car.speed / car.max_speed;
-            
-            if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
-                transform.rotate_y(car.turn_speed * turn_factor * dt);
-            }
-            if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
-                transform.rotate_y(-car.turn_speed * turn_factor * dt);
-            }
+        // Handle steering with more controlled torque
+        if keyboard_input.pressed(KeyCode::ArrowLeft) || keyboard_input.pressed(KeyCode::KeyA) {
+            let turn_torque = Vec3::Y * car.turn_speed * 2000.0; // Slightly reduced for better control
+            force.torque += turn_torque;
+        }
+        if keyboard_input.pressed(KeyCode::ArrowRight) || keyboard_input.pressed(KeyCode::KeyD) {
+            let turn_torque = Vec3::Y * -car.turn_speed * 2000.0; // Slightly reduced for better control
+            force.torque += turn_torque;
         }
 
-        // Move the car forward based on its current rotation
-        let forward = transform.forward();
-        transform.translation += forward * car.speed * dt;
+        // Apply stronger angular damping for stability
+        let angular_damping = -velocity.angvel * 8.0; // Increased for more stability
+        force.torque += angular_damping;
+
+        // Limit max speed by applying counter-force
+        if current_velocity.length() > car.max_speed {
+            let excess_velocity = current_velocity - current_velocity.normalize() * car.max_speed;
+            force.force -= excess_velocity * 500.0; // Strong speed limiting force
+        }
     }
 }
 

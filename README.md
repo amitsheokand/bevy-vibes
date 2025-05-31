@@ -74,11 +74,11 @@ The game follows Bevy and Rust best practices with a modular plugin architecture
 ## Building and Running
 
 ```bash
-# Run the game
-cargo run
+# Run debug game
+cargo run --release
 
-# Build for release
-cargo build --release
+# run release build
+cargo run --release
 ```
 
 ## Requirements

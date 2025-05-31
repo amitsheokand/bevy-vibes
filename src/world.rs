@@ -1,5 +1,6 @@
 use crate::*;
 use crate::car::{Car, CameraTarget, Wheel};
+use bevy_rapier3d::prelude::*;
 
 pub struct WorldPlugin;
 
@@ -35,9 +36,9 @@ fn spawn_ground(
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
 ) {
-    // Large ground plane
+    // Much larger ground plane for more driving space
     commands.spawn((
-        Mesh3d(meshes.add(Plane3d::default().mesh().size(100.0, 100.0))),
+        Mesh3d(meshes.add(Plane3d::default().mesh().size(300.0, 300.0))), // 3x bigger ground
         MeshMaterial3d(materials.add(StandardMaterial {
             base_color: Color::srgb(0.2, 0.6, 0.2), // Green grass color
             perceptual_roughness: 0.9,
@@ -45,6 +46,10 @@ fn spawn_ground(
             ..default()
         })),
         Transform::from_xyz(0.0, 0.0, 0.0), // At ground level
+        // Physics components
+        RigidBody::Fixed,
+        Collider::cuboid(150.0, 0.1, 150.0), // Large flat collider matching the bigger ground
+        Friction::coefficient(0.3), // Reduced friction for easier car movement
     ));
 }
 
@@ -80,6 +85,17 @@ fn spawn_car(
             Transform::from_xyz(0.0, 0.4, 0.0), // Lower to sit on ground (half of car height)
             Car::default(),
             CameraTarget,
+            // Physics components
+            RigidBody::Dynamic,
+            Collider::cuboid(0.7, 0.4, 1.8), // Car collision box
+            AdditionalMassProperties::Mass(500.0), // Reduced mass for better responsiveness
+            ExternalForce::default(),
+            ExternalImpulse::default(),
+            Velocity::default(),
+            Friction::coefficient(1.2), // Increased friction to reduce skidding
+            Restitution::coefficient(0.1), // Low bounce
+            Damping { linear_damping: 1.0, angular_damping: 2.0 }, // Increased damping to reduce skidding
+            LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z, // Prevent car from flipping
         ))
         .with_children(|parent| {
             // Position wheels closer to car body and at proper ground level
@@ -97,6 +113,7 @@ fn spawn_car(
                     Transform::from_translation(*position)
                         .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
                     Wheel, // Add Wheel component for rotation system
+                    // Wheel physics - just visual, collision handled by car body
                 ));
             }
         })
@@ -107,8 +124,8 @@ fn spawn_car(
 
 fn spawn_track_markers(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
 ) {
     // Simple track markers (cubes) - make them taller so shadows are more visible
     for i in 0..8 {
@@ -126,19 +143,25 @@ fn spawn_track_markers(
                 ..default()
             })),
             Transform::from_xyz(x, 1.5, z), // Raised to match new height
+            // Physics components
+            RigidBody::Dynamic,
+            Collider::cuboid(0.5, 1.5, 0.5),
+            AdditionalMassProperties::Mass(100.0), // Heavy markers
+            Friction::coefficient(0.6),
+            Restitution::coefficient(0.2),
         ));
     }
 }
 
 fn spawn_obstacles(
     commands: &mut Commands,
-    meshes: &mut ResMut<Assets<Mesh>>,
-    materials: &mut ResMut<Assets<StandardMaterial>>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
 ) {
-    // Add some obstacles/buildings around the track for shadow casting
-    for i in 0..4 {
-        let angle = i as f32 * std::f32::consts::PI / 2.0;
-        let radius = 25.0;
+    // Add more obstacles/buildings spread across the larger area
+    for i in 0..8 { // More buildings for bigger area
+        let angle = i as f32 * std::f32::consts::PI / 4.0; // 8 buildings instead of 4
+        let radius = 40.0 + (i % 3) as f32 * 20.0; // Vary distance: 40, 60, 80 units
         let x = angle.cos() * radius;
         let z = angle.sin() * radius;
         
@@ -151,6 +174,12 @@ fn spawn_obstacles(
                 ..default()
             })),
             Transform::from_xyz(x, 3.0, z),
+            // Physics components - heavy buildings
+            RigidBody::Dynamic,
+            Collider::cuboid(1.0, 3.0, 1.0),
+            AdditionalMassProperties::Mass(1000.0), // Very heavy buildings
+            Friction::coefficient(0.8),
+            Restitution::coefficient(0.1), // Low bounce
         ));
     }
 }
@@ -223,10 +252,10 @@ fn spawn_random_objects(
     });
     
     // Spawn random objects across the ground
-    for i in 0..50 {
+    for i in 0..100 { // More objects for the bigger ground
         // Generate random position avoiding the center track area
         let angle = (i as f32 * 2.3) % (2.0 * PI); // Pseudo-random angle
-        let distance = 20.0 + (i as f32 * 1.7) % 25.0; // Distance from center
+        let distance = 25.0 + (i as f32 * 1.7) % 75.0; // Spread across much larger distance (25-100 units from center)
         let x = angle.cos() * distance;
         let z = angle.sin() * distance;
         
@@ -251,6 +280,22 @@ fn spawn_random_objects(
             MeshMaterial3d(material),
             Transform::from_xyz(x, height, z)
                 .with_rotation(Quat::from_rotation_y((i as f32 * 0.7) % (2.0 * PI))),
+            // Physics components for interactive objects
+            RigidBody::Dynamic,
+            match object_type {
+                0 => Collider::cuboid(0.5, 0.5, 0.5), // Cube collider
+                1 => Collider::ball(0.5), // Sphere collider
+                2 => Collider::cylinder(0.75, 0.4), // Cylinder collider
+                _ => Collider::cuboid(0.5, 0.5, 0.5), // Default cube
+            },
+            AdditionalMassProperties::Mass(match object_type {
+                0 => 50.0,  // Cubes - medium weight
+                1 => 30.0,  // Spheres - lighter
+                2 => 80.0,  // Cylinders - heavier
+                _ => 50.0,  // Default
+            }),
+            Friction::coefficient(0.5),
+            Restitution::coefficient(0.3), // Some bounce
         ));
     }
 } 

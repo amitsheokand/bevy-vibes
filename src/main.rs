@@ -1,4 +1,5 @@
 use bevy::prelude::*;
+use bevy_rapier3d::prelude::*;
 use bevy_vibes::{
     car::CarPlugin,
     camera::CameraPlugin,
@@ -10,6 +11,7 @@ use bevy_vibes::{
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
         .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Nice blue sky color
         .add_plugins((
             WorldPlugin,
