@@ -11,9 +11,6 @@ impl Plugin for WorldPlugin {
 }
 
 fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
-    // Set simple blue sky background
-    commands.insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0)));
-    
     // Add large ground plane
     spawn_ground(&mut commands, &mut meshes, &mut materials);
     
@@ -116,6 +113,57 @@ fn spawn_car(
                     // Wheel physics - just visual, collision handled by car body
                 ));
             }
+
+            // Add headlights
+            let headlight_material = materials.add(StandardMaterial {
+                base_color: Color::srgb(1.0, 1.0, 0.9), // Warm white
+                emissive: LinearRgba::new(1.0, 1.0, 0.9, 0.0),
+                ..default()
+            });
+
+            // Left headlight
+            parent.spawn((
+                SpotLight {
+                    intensity: 5_000_000.0, // Much brighter headlight (5x increase again)
+                    color: Color::srgb(1.0, 1.0, 0.9), // Warm white
+                    shadows_enabled: true,
+                    inner_angle: PI / 8.0, // 22.5 degrees inner cone
+                    outer_angle: PI / 4.0, // 45 degrees outer cone
+                    range: 300.0, // Much longer range for nighttime driving
+                    ..default()
+                },
+                Transform::from_xyz(-0.5, 0.2, -1.6) // Left front of car
+                    .looking_at(Vec3::new(-0.5, 0.0, -20.0), Vec3::Y), // Point forward
+            )).with_children(|headlight_parent| {
+                // Visible headlight bulb
+                headlight_parent.spawn((
+                    Mesh3d(meshes.add(Sphere::new(0.08))),
+                    MeshMaterial3d(headlight_material.clone()),
+                    Transform::from_xyz(0.0, 0.0, 0.0),
+                ));
+            });
+
+            // Right headlight
+            parent.spawn((
+                SpotLight {
+                    intensity: 5_000_000.0, // Much brighter headlight (5x increase again)
+                    color: Color::srgb(1.0, 1.0, 0.9), // Warm white
+                    shadows_enabled: true,
+                    inner_angle: PI / 8.0, // 22.5 degrees inner cone
+                    outer_angle: PI / 4.0, // 45 degrees outer cone
+                    range: 300.0, // Much longer range for nighttime driving
+                    ..default()
+                },
+                Transform::from_xyz(0.5, 0.2, -1.6) // Right front of car
+                    .looking_at(Vec3::new(0.5, 0.0, -20.0), Vec3::Y), // Point forward
+            )).with_children(|headlight_parent| {
+                // Visible headlight bulb
+                headlight_parent.spawn((
+                    Mesh3d(meshes.add(Sphere::new(0.08))),
+                    MeshMaterial3d(headlight_material.clone()),
+                    Transform::from_xyz(0.0, 0.0, 0.0),
+                ));
+            });
         })
         .id();
 
@@ -185,10 +233,10 @@ fn spawn_obstacles(
 }
 
 fn setup_camera(commands: &mut Commands) {
-    // Camera with HDR and motion blur
+    // Camera with HDR, motion blur, and atmospheric scattering
     commands.spawn((
         Camera3d::default(),
-        // HDR for better lighting
+        // HDR is required for atmospheric scattering
         Camera {
             hdr: true,
             ..default()
@@ -199,10 +247,15 @@ fn setup_camera(commands: &mut Commands) {
             shutter_angle: 0.5, // Moderate motion blur
             samples: 4, // Good quality
         },
-        // Proper exposure for daylight
-        Exposure {
-            ev100: 13.0, // Bright daylight
+        // Atmospheric scattering for realistic sky
+        Atmosphere::EARTH,
+        AtmosphereSettings {
+            aerial_view_lut_max_distance: 50000.0, // Scaled for our scene
+            scene_units_to_m: 1.0, // Our units are meters
+            ..Default::default()
         },
+        // Proper exposure for atmospheric scattering
+        Exposure::SUNLIGHT,
         // Tone mapping for realistic colors
         Tonemapping::AcesFitted,
         // Bloom for realistic lighting

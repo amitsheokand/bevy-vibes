@@ -5,6 +5,7 @@ use bevy_vibes::{
     camera::CameraPlugin,
     lighting::LightingPlugin,
     world::WorldPlugin,
+    atmosphere::AtmospherePlugin,
     MotionBlur,
 };
 
@@ -18,6 +19,7 @@ fn main() {
             CarPlugin,
             CameraPlugin,
             LightingPlugin,
+            AtmospherePlugin,
         ))
         .add_systems(Startup, setup_ui)
         .add_systems(Update, ui_system)
@@ -26,7 +28,7 @@ fn main() {
 
 fn setup_ui(mut commands: Commands) {
     commands.spawn((
-        Text::new("Motion Blur Racing Game\nWASD/Arrow Keys to drive\n[1] Toggle Motion Blur\n[ESC] Exit"),
+        Text::new("Motion Blur Racing Game\nWASD/Arrow Keys to drive\n[1] Toggle Motion Blur\n[T] Fast Forward Time\n[G] Fast Backward Time\n[ESC] Exit"),
         Node {
             position_type: PositionType::Absolute,
             top: Val::Px(10.0),

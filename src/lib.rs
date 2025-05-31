@@ -2,12 +2,13 @@ pub mod car;
 pub mod camera;
 pub mod lighting;
 pub mod world;
+pub mod atmosphere;
 
 // Re-export commonly used Bevy types
 pub use bevy::{
     prelude::*,
     core_pipeline::{bloom::Bloom, tonemapping::Tonemapping, motion_blur::MotionBlur},
-    pbr::CascadeShadowConfigBuilder,
+    pbr::{CascadeShadowConfigBuilder, Atmosphere, AtmosphereSettings, light_consts::lux},
     render::camera::Exposure,
 };
 

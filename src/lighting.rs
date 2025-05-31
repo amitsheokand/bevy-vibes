@@ -17,23 +17,24 @@ fn setup_lighting(mut commands: Commands) {
     }
     .build();
 
-    // Sun (Directional Light) - simplified without atmosphere
+    // Sun (Directional Light) - using raw sunlight for atmospheric scattering
     commands.spawn((
         DirectionalLight {
             shadows_enabled: true,
-            illuminance: 30000.0, // Bright daylight
+            illuminance: lux::RAW_SUNLIGHT, // Raw sunlight for atmospheric scattering
+            color: Color::WHITE,
             ..default()
         },
-        // Sun position affects lighting and shadows
+        // Initial sun position (will be controlled by atmosphere system)
         Transform::from_xyz(10.0, 20.0, 10.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
         cascade_shadow_config,
     ));
 
-    // Bright ambient light for good visibility
+    // Ambient light (will be controlled by atmosphere system)
     commands.insert_resource(AmbientLight {
-        brightness: 150.0, // Good ambient light
-        color: Color::srgb(0.9, 0.95, 1.0), // Bright daylight tint
+        brightness: 300.0, // Starting brightness
+        color: Color::srgb(0.9, 0.95, 1.0), // Daylight tint
         ..default()
     });
 } 
