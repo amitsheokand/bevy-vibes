@@ -15,6 +15,7 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
+        // .add_plugins(RapierDebugRenderPlugin::default()) // Add debug wireframes for physics
         .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2))) // Dark menu background
         .add_plugins((
             MenuPlugin,

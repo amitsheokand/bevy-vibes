@@ -2,6 +2,7 @@ use crate::*;
 use crate::menu::{GameState, GameSettings};
 use crate::car::{Car, CameraTarget};
 use crate::world::GameEntity;
+use bevy_rapier3d::prelude::Velocity;
 
 pub struct CameraPlugin;
 
@@ -69,19 +70,22 @@ pub struct CameraState {
 }
 
 fn camera_follow_system(
-    car_query: Query<(&Transform, &Car), (With<CameraTarget>, Without<Camera3d>)>,
+    car_query: Query<(&Transform, &Car, &Velocity), (With<CameraTarget>, Without<Camera3d>)>,
     mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<CameraTarget>)>,
     mut camera_state: ResMut<CameraState>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
 ) {
-    if let Ok((car_transform, car)) = car_query.single() {
+    if let Ok((car_transform, car, velocity)) = car_query.single() {
         if let Ok(mut camera_transform) = camera_query.single_mut() {
             let car_pos = car_transform.translation;
             let car_forward = *car_transform.forward();
             
             // Calculate speed factor (0.0 when idle, 1.0 at max speed)
             let speed_factor = (car.speed.abs() / car.max_speed).clamp(0.0, 1.0);
+            
+            // Calculate velocity magnitude for camera responsiveness
+            let velocity_magnitude = velocity.linvel.length();
             
             // Determine if we're actively reversing based on input, not just speed
             let is_actively_reversing = keyboard_input.pressed(KeyCode::ArrowDown) || 
@@ -119,8 +123,11 @@ fn camera_follow_system(
             
             let target_pos = car_pos + camera_offset;
             
-            // Smooth camera movement with consistent speed
-            let lerp_speed = 0.02; // Consistent, stable movement
+            // Dynamic camera follow speed - faster when car is accelerating/moving fast
+            let base_lerp_speed = 0.08; // Increased from 0.02 for better responsiveness
+            let velocity_responsive_speed = base_lerp_speed + (velocity_magnitude / car.max_speed) * 0.15;
+            let lerp_speed = velocity_responsive_speed.min(0.25); // Cap at 0.25 for stability
+            
             camera_transform.translation = camera_transform.translation.lerp(target_pos, lerp_speed);
             
             // Make camera look at the car with minimal look-ahead

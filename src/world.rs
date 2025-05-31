@@ -3,18 +3,23 @@ use crate::car::{Car, CameraTarget, Wheel};
 use crate::menu::GameState;
 use crate::post_processing::RacingPostProcessSettings;
 use bevy_rapier3d::prelude::*;
+use bevy::gltf::GltfAssetLabel;
 
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), setup_world)
+           .add_systems(Update, setup_car_wheels.run_if(in_state(GameState::InGame)))
            .add_systems(OnExit(GameState::InGame), cleanup_world);
     }
 }
 
 #[derive(Component)]
 pub struct GameEntity;
+
+#[derive(Component)]
+pub struct CarModel;
 
 fn cleanup_world(
     mut commands: Commands,
@@ -42,7 +47,7 @@ fn cleanup_world(
     commands.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2)));
 }
 
-fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>, asset_server: Res<AssetServer>) {
     // Set game background color
     commands.insert_resource(ClearColor(Color::srgb(0.5, 0.8, 1.0))); // Blue sky for game
     
@@ -51,8 +56,8 @@ fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mat
     
     // Camera is handled by CameraPlugin - don't duplicate here
     
-    // Spawn car with wheels and motion blur
-    let _car_entity = spawn_car(&mut commands, &mut meshes, &mut materials);
+    // Spawn car with GLB model
+    let _car_entity = spawn_car(&mut commands, &mut materials, &asset_server);
     
     // Create track markers and obstacles
     spawn_track_markers(&mut commands, &mut meshes, &mut materials);
@@ -87,73 +92,45 @@ fn spawn_ground(
 
 fn spawn_car(
     commands: &mut Commands,
-    meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
+    asset_server: &AssetServer,
 ) -> Entity {
-    // Make car body narrower so wheels are visible
-    let car_body = meshes.add(Mesh::from(Cuboid::new(1.4, 0.8, 3.6))); // Narrower and slightly smaller
-    // Make wheels thinner and better proportioned
-    let wheel_mesh = meshes.add(Mesh::from(Cylinder::new(0.3, 0.15))); // Thinner wheels
+    // Load the GLB car model
+    let car_scene = asset_server.load(GltfAssetLabel::Scene(0).from_asset("cars/sedan-sports.glb"));
     
-    let car_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.8, 0.1, 0.1), // Red car
-        metallic: 0.3,
-        perceptual_roughness: 0.7,
-        ..default()
-    });
-    
-    let wheel_material = materials.add(StandardMaterial {
-        base_color: Color::srgb(0.1, 0.1, 0.1), // Black wheels
-        metallic: 0.1,
-        perceptual_roughness: 0.9,
-        ..default()
-    });
-
-    // Spawn the car entity - lower it to sit on ground
+    // Spawn the car entity with physics and game components
     let car_entity = commands
         .spawn((
-            Mesh3d(car_body),
-            MeshMaterial3d(car_material),
-            Transform::from_xyz(0.0, 0.4, 0.0), // Lower to sit on ground (half of car height)
+            // Start with just the transform and physics - no visual model yet
+            Transform::from_xyz(0.0, 0.5, 0.0), // Position so collider bottom touches ground (0.5 - 0.5 = 0.0)
+            Visibility::default(), // Add visibility component to prevent warnings
             Car::default(),
             CameraTarget,
+            CarModel, // Mark to identify this as the car model for wheel setup
             GameEntity, // Mark for cleanup
         ))
         .insert((
-            // Physics components
+            // Physics components - use appropriate collider for a car
             RigidBody::Dynamic,
-            Collider::cuboid(0.7, 0.4, 1.8), // Car collision box
+            Collider::cuboid(0.7, 0.5, 1.2), // Car collision box - made slightly taller (0.4 -> 0.5)
             AdditionalMassProperties::Mass(500.0), // Reduced mass for better responsiveness
             ExternalForce::default(),
             ExternalImpulse::default(),
             Velocity::default(),
-            Friction::coefficient(1.2), // Increased friction to reduce skidding
+            Friction::coefficient(2.0), // Increased from 1.2 to reduce skidding
             Restitution::coefficient(0.1), // Low bounce
             Damping { linear_damping: 1.0, angular_damping: 2.0 }, // Increased damping to reduce skidding
             LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z, // Prevent car from flipping
         ))
         .with_children(|parent| {
-            // Position wheels closer to car body and at proper ground level
-            let wheel_positions = [
-                Vec3::new(-0.75, -0.1, 1.2),  // Front left - proper height for radius 0.3
-                Vec3::new(0.75, -0.1, 1.2),   // Front right - proper height for radius 0.3
-                Vec3::new(-0.75, -0.1, -1.2), // Rear left - proper height for radius 0.3
-                Vec3::new(0.75, -0.1, -1.2),  // Rear right - proper height for radius 0.3
-            ];
+            // Add the GLB model as a child with offset to align with physics collider
+            parent.spawn((
+                SceneRoot(car_scene),
+                Transform::from_xyz(0.0, -0.5, 0.0), // Move model down to align with collider
+            ));
 
-            for position in wheel_positions.iter() {
-                parent.spawn((
-                    Mesh3d(wheel_mesh.clone()),
-                    MeshMaterial3d(wheel_material.clone()),
-                    Transform::from_translation(*position)
-                        .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
-                    Wheel, // Add Wheel component for rotation system
-                    // Wheel physics - just visual, collision handled by car body
-                ));
-            }
-
-            // Add headlights
-            let headlight_material = materials.add(StandardMaterial {
+            // Add headlights to the car
+            let _headlight_material = materials.add(StandardMaterial {
                 base_color: Color::srgb(1.0, 1.0, 0.9), // Warm white
                 emissive: LinearRgba::new(1.0, 1.0, 0.9, 0.0),
                 ..default()
@@ -162,50 +139,89 @@ fn spawn_car(
             // Left headlight
             parent.spawn((
                 SpotLight {
-                    intensity: 5_000_000.0, // Much brighter headlight (5x increase again)
+                    intensity: 5_000_000.0, // Much brighter headlight 
                     color: Color::srgb(1.0, 1.0, 0.9), // Warm white
                     shadows_enabled: true,
                     inner_angle: PI / 8.0, // 22.5 degrees inner cone
                     outer_angle: PI / 4.0, // 45 degrees outer cone
-                    range: 300.0, // Much longer range for nighttime driving
+                    range: 400.0, // Much longer range for nighttime driving
                     ..default()
                 },
-                Transform::from_xyz(-0.5, 0.2, -1.6) // Left front of car
+                Transform::from_xyz(-0.5, 0.0, -1.2) // Adjusted Y to account for model offset
                     .looking_at(Vec3::new(-0.5, 0.0, -20.0), Vec3::Y), // Point forward
-            )).with_children(|headlight_parent| {
-                // Visible headlight bulb
-                headlight_parent.spawn((
-                    Mesh3d(meshes.add(Sphere::new(0.08))),
-                    MeshMaterial3d(headlight_material.clone()),
-                    Transform::from_xyz(0.0, 0.0, 0.0),
-                ));
-            });
+            ));
 
             // Right headlight
             parent.spawn((
                 SpotLight {
-                    intensity: 5_000_000.0, // Much brighter headlight (5x increase again)
+                    intensity: 5_000_000.0, // Much brighter headlight
                     color: Color::srgb(1.0, 1.0, 0.9), // Warm white
                     shadows_enabled: true,
                     inner_angle: PI / 8.0, // 22.5 degrees inner cone
                     outer_angle: PI / 4.0, // 45 degrees outer cone
-                    range: 300.0, // Much longer range for nighttime driving
+                    range: 400.0, // Much longer range for nighttime driving
                     ..default()
                 },
-                Transform::from_xyz(0.5, 0.2, -1.6) // Right front of car
+                Transform::from_xyz(0.5, 0.0, -1.2) // Adjusted Y to account for model offset
                     .looking_at(Vec3::new(0.5, 0.0, -20.0), Vec3::Y), // Point forward
-            )).with_children(|headlight_parent| {
-                // Visible headlight bulb
-                headlight_parent.spawn((
-                    Mesh3d(meshes.add(Sphere::new(0.08))),
-                    MeshMaterial3d(headlight_material.clone()),
-                    Transform::from_xyz(0.0, 0.0, 0.0),
-                ));
-            });
+            ));
         })
         .id();
 
     car_entity
+}
+
+// System to find and mark wheel entities by name
+fn setup_car_wheels(
+    mut commands: Commands,
+    car_query: Query<Entity, (With<CarModel>, Without<Wheel>)>,
+    children: Query<&Children>,
+    names: Query<&Name>,
+    wheel_query: Query<Entity, With<Wheel>>,
+) {
+    // Check if we already have wheels marked
+    if wheel_query.iter().count() >= 4 {
+        return; // All wheels already marked, no need to continue
+    }
+
+    for car_entity in car_query.iter() {
+        if let Ok(car_children) = children.get(car_entity) {
+            mark_wheels_recursive(&mut commands, car_children, &children, &names, &wheel_query);
+        }
+    }
+}
+
+fn mark_wheels_recursive(
+    commands: &mut Commands,
+    entities: &Children,
+    children: &Query<&Children>,
+    names: &Query<&Name>,
+    existing_wheels: &Query<Entity, With<Wheel>>,
+) {
+    for entity in entities.iter() {
+        // Skip if this entity is already marked as a wheel
+        if existing_wheels.get(entity).is_ok() {
+            continue;
+        }
+
+        // Check if this entity has a name and if it's a wheel
+        if let Ok(name) = names.get(entity) {
+            let name_str = name.as_str();
+            if name_str == "wheel-back-left" 
+                || name_str == "wheel-back-right" 
+                || name_str == "wheel-front-left" 
+                || name_str == "wheel-front-right" {
+                // Mark this entity as a wheel
+                commands.entity(entity).insert(Wheel);
+                println!("Found and marked wheel: {}", name_str);
+            }
+        }
+
+        // Recursively check children
+        if let Ok(child_entities) = children.get(entity) {
+            mark_wheels_recursive(commands, child_entities, children, names, existing_wheels);
+        }
+    }
 }
 
 fn spawn_track_markers(
