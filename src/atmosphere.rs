@@ -1,12 +1,13 @@
 use crate::*;
+use crate::menu::GameState;
 
 pub struct AtmospherePlugin;
 
 impl Plugin for AtmospherePlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(TimeOfDay::default())
-            .add_systems(Startup, setup_atmosphere)
-            .add_systems(Update, (update_time_of_day, update_sun_position));
+            .add_systems(OnEnter(GameState::InGame), setup_atmosphere)
+            .add_systems(Update, (update_time_of_day, update_sun_position).run_if(in_state(GameState::InGame)));
     }
 }
 

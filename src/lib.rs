@@ -3,6 +3,7 @@ pub mod camera;
 pub mod lighting;
 pub mod world;
 pub mod atmosphere;
+pub mod menu;
 
 // Re-export commonly used Bevy types
 pub use bevy::{
@@ -12,4 +13,5 @@ pub use bevy::{
     render::camera::Exposure,
 };
 
+pub use bevy_rapier3d::prelude::*;
 pub use std::f32::consts::PI; 

@@ -1,4 +1,5 @@
 use crate::*;
+use crate::menu::GameState;
 use bevy_rapier3d::prelude::*;
 
 #[derive(Component)]
@@ -34,7 +35,7 @@ pub struct CarPlugin;
 
 impl Plugin for CarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (car_physics_system, wheel_rotation_system));
+        app.add_systems(Update, (car_physics_system, wheel_rotation_system).run_if(in_state(GameState::InGame)));
     }
 }
 

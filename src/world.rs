@@ -1,16 +1,36 @@
 use crate::*;
 use crate::car::{Car, CameraTarget, Wheel};
+use crate::menu::GameState;
 use bevy_rapier3d::prelude::*;
 
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_world);
+        app.add_systems(OnEnter(GameState::InGame), setup_world)
+           .add_systems(OnExit(GameState::InGame), cleanup_world);
     }
 }
 
+#[derive(Component)]
+pub struct GameEntity;
+
+fn cleanup_world(
+    mut commands: Commands,
+    game_entities: Query<Entity, With<GameEntity>>,
+) {
+    for entity in game_entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+    
+    // Reset to menu background
+    commands.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2)));
+}
+
 fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut materials: ResMut<Assets<StandardMaterial>>) {
+    // Set game background color
+    commands.insert_resource(ClearColor(Color::srgb(0.5, 0.8, 1.0))); // Blue sky for game
+    
     // Add large ground plane
     spawn_ground(&mut commands, &mut meshes, &mut materials);
     
@@ -47,6 +67,7 @@ fn spawn_ground(
         RigidBody::Fixed,
         Collider::cuboid(150.0, 0.1, 150.0), // Large flat collider matching the bigger ground
         Friction::coefficient(0.3), // Reduced friction for easier car movement
+        GameEntity, // Mark for cleanup
     ));
 }
 
@@ -82,6 +103,9 @@ fn spawn_car(
             Transform::from_xyz(0.0, 0.4, 0.0), // Lower to sit on ground (half of car height)
             Car::default(),
             CameraTarget,
+            GameEntity, // Mark for cleanup
+        ))
+        .insert((
             // Physics components
             RigidBody::Dynamic,
             Collider::cuboid(0.7, 0.4, 1.8), // Car collision box
@@ -197,6 +221,7 @@ fn spawn_track_markers(
             AdditionalMassProperties::Mass(100.0), // Heavy markers
             Friction::coefficient(0.6),
             Restitution::coefficient(0.2),
+            GameEntity, // Mark for cleanup
         ));
     }
 }
@@ -228,6 +253,7 @@ fn spawn_obstacles(
             AdditionalMassProperties::Mass(1000.0), // Very heavy buildings
             Friction::coefficient(0.8),
             Restitution::coefficient(0.1), // Low bounce
+            GameEntity, // Mark for cleanup
         ));
     }
 }
@@ -242,6 +268,9 @@ fn setup_camera(commands: &mut Commands) {
             ..default()
         },
         Transform::from_xyz(-10.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
+        GameEntity, // Mark for cleanup
+    ))
+    .insert((
         // Motion blur for realistic speed effects
         MotionBlur {
             shutter_angle: 0.5, // Moderate motion blur
@@ -349,6 +378,7 @@ fn spawn_random_objects(
             }),
             Friction::coefficient(0.5),
             Restitution::coefficient(0.3), // Some bounce
+            GameEntity, // Mark for cleanup
         ));
     }
 } 

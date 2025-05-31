@@ -8,50 +8,84 @@ use bevy_vibes::{
     atmosphere::AtmospherePlugin,
     MotionBlur,
 };
+use bevy_vibes::menu::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_plugins(RapierPhysicsPlugin::<NoUserData>::default())
-        .insert_resource(ClearColor(Color::srgb(0.4, 0.7, 1.0))) // Nice blue sky color
+        .insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2))) // Dark menu background
         .add_plugins((
+            MenuPlugin,
             WorldPlugin,
             CarPlugin,
             CameraPlugin,
             LightingPlugin,
             AtmospherePlugin,
         ))
-        .add_systems(Startup, setup_ui)
-        .add_systems(Update, ui_system)
+        .add_systems(OnEnter(GameState::InGame), apply_initial_settings)
+        .add_systems(Update, (
+            handle_game_input,
+            apply_motion_blur_settings,
+        ).run_if(in_state(GameState::InGame)))
         .run();
 }
 
-fn setup_ui(mut commands: Commands) {
-    commands.spawn((
-        Text::new("Motion Blur Racing Game\nWASD/Arrow Keys to drive\n[1] Toggle Motion Blur\n[T] Fast Forward Time\n[G] Fast Backward Time\n[ESC] Exit"),
-        Node {
-            position_type: PositionType::Absolute,
-            top: Val::Px(10.0),
-            left: Val::Px(10.0),
-            ..default()
-        },
-        TextColor(Color::WHITE),
-    ));
-}
-
-fn ui_system(
-    mut motion_blur_query: Query<&mut MotionBlur>,
+fn handle_game_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut app_exit_events: EventWriter<AppExit>,
+    mut next_state: ResMut<NextState<GameState>>,
+    settings: Res<GameSettings>,
+    mut camera_query: Query<&mut MotionBlur, With<Camera3d>>,
 ) {
+    // ESC to return to main menu
     if keyboard_input.just_pressed(KeyCode::Escape) {
-        app_exit_events.write(AppExit::Success);
+        next_state.set(GameState::MainMenu);
     }
     
+    // Toggle motion blur based on settings
     if keyboard_input.just_pressed(KeyCode::Digit1) {
-        if let Ok(mut motion_blur) = motion_blur_query.single_mut() {
-            // Toggle motion blur
-            motion_blur.samples = if motion_blur.samples > 0 { 0 } else { 4 };
+        for mut motion_blur in camera_query.iter_mut() {
+            if settings.motion_blur_enabled {
+                motion_blur.shutter_angle = 0.5;
+                motion_blur.samples = 4;
+            } else {
+                motion_blur.shutter_angle = 0.0;
+                motion_blur.samples = 1;
+            }
+        }
+    }
+}
+
+fn apply_initial_settings(
+    settings: Res<GameSettings>,
+    mut camera_query: Query<&mut MotionBlur, With<Camera3d>>,
+) {
+    // Apply initial motion blur settings when game starts
+    for mut motion_blur in camera_query.iter_mut() {
+        if settings.motion_blur_enabled {
+            motion_blur.shutter_angle = 0.5;
+            motion_blur.samples = 4;
+        } else {
+            motion_blur.shutter_angle = 0.0;
+            motion_blur.samples = 1;
+        }
+    }
+}
+
+fn apply_motion_blur_settings(
+    settings: Res<GameSettings>,
+    mut camera_query: Query<&mut MotionBlur, With<Camera3d>>,
+) {
+    // Only run when settings have changed
+    if settings.is_changed() {
+        for mut motion_blur in camera_query.iter_mut() {
+            if settings.motion_blur_enabled {
+                motion_blur.shutter_angle = 0.5;
+                motion_blur.samples = 4;
+            } else {
+                motion_blur.shutter_angle = 0.0;
+                motion_blur.samples = 1;
+            }
         }
     }
 }

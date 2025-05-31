@@ -1,10 +1,11 @@
 use crate::*;
+use crate::menu::GameState;
 
 pub struct LightingPlugin;
 
 impl Plugin for LightingPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup_lighting);
+        app.add_systems(OnEnter(GameState::InGame), setup_lighting);
     }
 }
 

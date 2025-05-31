@@ -1,13 +1,18 @@
 use crate::*;
+use crate::menu::GameState;
 use crate::car::{Car, CameraTarget};
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(CameraState::default())
-            .add_systems(Update, camera_follow_system);
+        app.add_systems(OnEnter(GameState::InGame), setup_camera_state)
+            .add_systems(Update, camera_follow_system.run_if(in_state(GameState::InGame)));
     }
+}
+
+fn setup_camera_state(mut commands: Commands) {
+    commands.insert_resource(CameraState::default());
 }
 
 #[derive(Resource, Default)]
