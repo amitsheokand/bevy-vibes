@@ -6,7 +6,7 @@ pub mod world;
 // Re-export commonly used Bevy types
 pub use bevy::{
     prelude::*,
-    core_pipeline::{bloom::Bloom, tonemapping::Tonemapping},
+    core_pipeline::{bloom::Bloom, tonemapping::Tonemapping, motion_blur::MotionBlur},
     pbr::CascadeShadowConfigBuilder,
     render::camera::Exposure,
 };

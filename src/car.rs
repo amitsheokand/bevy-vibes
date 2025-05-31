@@ -22,11 +22,14 @@ impl Default for Car {
 #[derive(Component)]
 pub struct CameraTarget;
 
+#[derive(Component)]
+pub struct Wheel;
+
 pub struct CarPlugin;
 
 impl Plugin for CarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, car_movement_system);
+        app.add_systems(Update, (car_movement_system, wheel_rotation_system));
     }
 }
 
@@ -66,5 +69,27 @@ fn car_movement_system(
         // Move the car forward based on its current rotation
         let forward = transform.forward();
         transform.translation += forward * car.speed * dt;
+    }
+}
+
+fn wheel_rotation_system(
+    time: Res<Time>,
+    car_query: Query<&Car>,
+    mut wheel_query: Query<&mut Transform, (With<Wheel>, Without<Car>)>,
+) {
+    if let Ok(car) = car_query.single() {
+        let dt = time.delta_secs();
+        
+        // Calculate wheel rotation based on car speed
+        // Wheel circumference affects rotation speed
+        let wheel_radius = 0.3;
+        let wheel_circumference = 2.0 * PI * wheel_radius;
+        let rotation_speed = car.speed / wheel_circumference;
+        
+        for mut wheel_transform in wheel_query.iter_mut() {
+            // Rotate wheels around their local Y axis (proper rolling motion)
+            // Negative rotation because forward movement should rotate wheels forward
+            wheel_transform.rotate_local_y(-rotation_speed * dt);
+        }
     }
 } 
