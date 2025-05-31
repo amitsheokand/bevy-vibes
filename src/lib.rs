@@ -4,6 +4,7 @@ pub mod lighting;
 pub mod world;
 pub mod atmosphere;
 pub mod menu;
+pub mod post_processing;
 
 // Re-export commonly used Bevy types
 pub use bevy::{
@@ -13,5 +14,8 @@ pub use bevy::{
     render::camera::Exposure,
 };
 
-pub use bevy_rapier3d::prelude::*;
+pub use bevy_rapier3d::prelude::{
+    RigidBody, Collider, AdditionalMassProperties, ExternalForce, ExternalImpulse, 
+    Velocity, Friction, Restitution, Damping, LockedAxes, RapierPhysicsPlugin,
+};
 pub use std::f32::consts::PI; 

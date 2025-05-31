@@ -1,5 +1,6 @@
 use crate::*;
 use crate::menu::GameState;
+use crate::world::GameEntity;
 
 pub struct LightingPlugin;
 
@@ -8,6 +9,9 @@ impl Plugin for LightingPlugin {
         app.add_systems(OnEnter(GameState::InGame), setup_lighting);
     }
 }
+
+#[derive(Component)]
+pub struct GameLight;
 
 fn setup_lighting(mut commands: Commands) {
     // Configure cascade shadow map for better shadow quality
@@ -30,6 +34,8 @@ fn setup_lighting(mut commands: Commands) {
         Transform::from_xyz(10.0, 20.0, 10.0)
             .looking_at(Vec3::ZERO, Vec3::Y),
         cascade_shadow_config,
+        GameLight, // Mark for cleanup
+        GameEntity, // Mark for cleanup
     ));
 
     // Ambient light (will be controlled by atmosphere system)

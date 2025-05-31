@@ -40,7 +40,7 @@ impl Plugin for CarPlugin {
 }
 
 fn car_physics_system(
-    time: Res<Time>,
+    _time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut car_query: Query<(&mut ExternalForce, &ExternalImpulse, &Transform, &mut Car, &Velocity)>,
 ) {

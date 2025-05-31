@@ -1,6 +1,7 @@
 use crate::*;
 use crate::car::{Car, CameraTarget, Wheel};
 use crate::menu::GameState;
+use crate::post_processing::RacingPostProcessSettings;
 use bevy_rapier3d::prelude::*;
 
 pub struct WorldPlugin;
@@ -18,10 +19,24 @@ pub struct GameEntity;
 fn cleanup_world(
     mut commands: Commands,
     game_entities: Query<Entity, With<GameEntity>>,
+    all_cameras: Query<Entity, With<Camera>>,
 ) {
     for entity in game_entities.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
+    
+    // Remove post-processing components from ALL cameras to prevent accumulation
+    for camera_entity in all_cameras.iter() {
+        commands.entity(camera_entity).remove::<RacingPostProcessSettings>();
+        commands.entity(camera_entity).remove::<MotionBlur>();
+    }
+    
+    // Reset ambient light to menu defaults to prevent brightness accumulation
+    commands.insert_resource(AmbientLight {
+        brightness: 0.3, // Very low for menu
+        color: Color::srgb(0.5, 0.5, 0.6), // Neutral menu lighting
+        ..default()
+    });
     
     // Reset to menu background
     commands.insert_resource(ClearColor(Color::srgb(0.1, 0.1, 0.2)));
@@ -34,8 +49,7 @@ fn setup_world(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mat
     // Add large ground plane
     spawn_ground(&mut commands, &mut meshes, &mut materials);
     
-    // Setup camera
-    setup_camera(&mut commands);
+    // Camera is handled by CameraPlugin - don't duplicate here
     
     // Spawn car with wheels and motion blur
     let _car_entity = spawn_car(&mut commands, &mut meshes, &mut materials);
@@ -256,40 +270,6 @@ fn spawn_obstacles(
             GameEntity, // Mark for cleanup
         ));
     }
-}
-
-fn setup_camera(commands: &mut Commands) {
-    // Camera with HDR, motion blur, and atmospheric scattering
-    commands.spawn((
-        Camera3d::default(),
-        // HDR is required for atmospheric scattering
-        Camera {
-            hdr: true,
-            ..default()
-        },
-        Transform::from_xyz(-10.0, 10.0, 10.0).looking_at(Vec3::ZERO, Vec3::Y),
-        GameEntity, // Mark for cleanup
-    ))
-    .insert((
-        // Motion blur for realistic speed effects
-        MotionBlur {
-            shutter_angle: 0.5, // Moderate motion blur
-            samples: 4, // Good quality
-        },
-        // Atmospheric scattering for realistic sky
-        Atmosphere::EARTH,
-        AtmosphereSettings {
-            aerial_view_lut_max_distance: 50000.0, // Scaled for our scene
-            scene_units_to_m: 1.0, // Our units are meters
-            ..Default::default()
-        },
-        // Proper exposure for atmospheric scattering
-        Exposure::SUNLIGHT,
-        // Tone mapping for realistic colors
-        Tonemapping::AcesFitted,
-        // Bloom for realistic lighting
-        Bloom::NATURAL,
-    ));
 }
 
 fn spawn_random_objects(

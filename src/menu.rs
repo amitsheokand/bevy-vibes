@@ -8,9 +8,21 @@ pub enum GameState {
     InGame,
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource)]
 pub struct GameSettings {
     pub motion_blur_enabled: bool,
+    pub post_processing_enabled: bool,
+    pub atmospheric_fog_enabled: bool,
+}
+
+impl Default for GameSettings {
+    fn default() -> Self {
+        Self {
+            motion_blur_enabled: true,
+            post_processing_enabled: true, 
+            atmospheric_fog_enabled: true, // Fog enabled by default for immersion
+        }
+    }
 }
 
 pub struct MenuPlugin;
@@ -54,6 +66,24 @@ pub struct MotionBlurText;
 
 #[derive(Component)]
 pub struct MotionBlurButton;
+
+#[derive(Component)]
+pub struct PostProcessToggle;
+
+#[derive(Component)]
+pub struct PostProcessText;
+
+#[derive(Component)]
+pub struct PostProcessButton;
+
+#[derive(Component)]
+pub struct AtmosphericFogToggle;
+
+#[derive(Component)]
+pub struct AtmosphericFogText;
+
+#[derive(Component)]
+pub struct AtmosphericFogButton;
 
 fn setup_main_menu(mut commands: Commands) {
     // Spawn a camera for the menu
@@ -173,7 +203,7 @@ fn setup_main_menu(mut commands: Commands) {
 
 fn cleanup_main_menu(mut commands: Commands, query: Query<Entity, With<MainMenuUI>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
@@ -216,7 +246,7 @@ fn main_menu_system(
     // Handle Exit button
     for interaction in exit_button_query.iter() {
         if *interaction == Interaction::Pressed {
-            exit.send(AppExit::Success);
+            exit.write(AppExit::Success);
         }
     }
 }
@@ -292,6 +322,76 @@ fn setup_settings_menu(mut commands: Commands, settings: Res<GameSettings>) {
                     ));
                 });
 
+            // Post Processing Toggle
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(300.0),
+                        height: Val::Px(60.0),
+                        margin: UiRect::all(Val::Px(10.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(if settings.post_processing_enabled {
+                        Color::srgb(0.2, 0.8, 0.2)
+                    } else {
+                        Color::srgb(0.8, 0.2, 0.2)
+                    }),
+                    PostProcessToggle,
+                    PostProcessButton,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(format!(
+                            "POST PROCESSING: {}",
+                            if settings.post_processing_enabled { "ON" } else { "OFF" }
+                        )),
+                        TextFont {
+                            font_size: 25.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        PostProcessText,
+                    ));
+                });
+
+            // Atmospheric Fog Toggle
+            parent
+                .spawn((
+                    Button,
+                    Node {
+                        width: Val::Px(300.0),
+                        height: Val::Px(60.0),
+                        margin: UiRect::all(Val::Px(10.0)),
+                        justify_content: JustifyContent::Center,
+                        align_items: AlignItems::Center,
+                        ..default()
+                    },
+                    BackgroundColor(if settings.atmospheric_fog_enabled {
+                        Color::srgb(0.2, 0.8, 0.2)
+                    } else {
+                        Color::srgb(0.8, 0.2, 0.2)
+                    }),
+                    AtmosphericFogToggle,
+                    AtmosphericFogButton,
+                ))
+                .with_children(|button| {
+                    button.spawn((
+                        Text::new(format!(
+                            "ATMOSPHERIC FOG: {}",
+                            if settings.atmospheric_fog_enabled { "ON" } else { "OFF" }
+                        )),
+                        TextFont {
+                            font_size: 25.0,
+                            ..default()
+                        },
+                        TextColor(Color::WHITE),
+                        AtmosphericFogText,
+                    ));
+                });
+
             // Back Button
             parent
                 .spawn((
@@ -322,16 +422,22 @@ fn setup_settings_menu(mut commands: Commands, settings: Res<GameSettings>) {
 
 fn cleanup_settings_menu(mut commands: Commands, query: Query<Entity, With<SettingsMenuUI>>) {
     for entity in query.iter() {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }
 
 fn settings_menu_system(
-    mut interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>, Without<MotionBlurButton>)>,
+    mut interaction_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<Button>, Without<MotionBlurButton>, Without<PostProcessButton>, Without<AtmosphericFogButton>)>,
     motion_blur_query: Query<&Interaction, (Changed<Interaction>, With<MotionBlurToggle>)>,
+    post_process_query: Query<&Interaction, (Changed<Interaction>, With<PostProcessToggle>)>,
+    atmospheric_fog_query: Query<&Interaction, (Changed<Interaction>, With<AtmosphericFogToggle>)>,
     back_button_query: Query<&Interaction, (Changed<Interaction>, With<BackButton>)>,
-    mut motion_blur_button_query: Query<&mut BackgroundColor, With<MotionBlurButton>>,
-    mut motion_blur_text_query: Query<&mut Text, With<MotionBlurText>>,
+    mut motion_blur_button_query: Query<&mut BackgroundColor, (With<MotionBlurButton>, Without<PostProcessButton>, Without<AtmosphericFogButton>)>,
+    mut post_process_button_query: Query<&mut BackgroundColor, (With<PostProcessButton>, Without<MotionBlurButton>, Without<AtmosphericFogButton>)>,
+    mut atmospheric_fog_button_query: Query<&mut BackgroundColor, (With<AtmosphericFogButton>, Without<MotionBlurButton>, Without<PostProcessButton>)>,
+    mut motion_blur_text_query: Query<&mut Text, (With<MotionBlurText>, Without<PostProcessText>, Without<AtmosphericFogText>)>,
+    mut post_process_text_query: Query<&mut Text, (With<PostProcessText>, Without<MotionBlurText>, Without<AtmosphericFogText>)>,
+    mut atmospheric_fog_text_query: Query<&mut Text, (With<AtmosphericFogText>, Without<MotionBlurText>, Without<PostProcessText>)>,
     mut settings: ResMut<GameSettings>,
     mut next_state: ResMut<NextState<GameState>>,
 ) {
@@ -368,6 +474,54 @@ fn settings_menu_system(
                 **text = format!(
                     "MOTION BLUR: {}",
                     if settings.motion_blur_enabled { "ON" } else { "OFF" }
+                );
+            }
+        }
+    }
+
+    // Handle Post Processing toggle
+    for interaction in post_process_query.iter() {
+        if *interaction == Interaction::Pressed {
+            settings.post_processing_enabled = !settings.post_processing_enabled;
+            
+            // Update the button color directly
+            if let Ok(mut button_color) = post_process_button_query.single_mut() {
+                *button_color = BackgroundColor(if settings.post_processing_enabled {
+                    Color::srgb(0.2, 0.8, 0.2) // Green for ON
+                } else {
+                    Color::srgb(0.8, 0.2, 0.2) // Red for OFF
+                });
+            }
+            
+            // Update the button text directly
+            if let Ok(mut text) = post_process_text_query.single_mut() {
+                **text = format!(
+                    "POST PROCESSING: {}",
+                    if settings.post_processing_enabled { "ON" } else { "OFF" }
+                );
+            }
+        }
+    }
+
+    // Handle Atmospheric Fog toggle
+    for interaction in atmospheric_fog_query.iter() {
+        if *interaction == Interaction::Pressed {
+            settings.atmospheric_fog_enabled = !settings.atmospheric_fog_enabled;
+            
+            // Update the button color directly
+            if let Ok(mut button_color) = atmospheric_fog_button_query.single_mut() {
+                *button_color = BackgroundColor(if settings.atmospheric_fog_enabled {
+                    Color::srgb(0.2, 0.8, 0.2) // Green for ON
+                } else {
+                    Color::srgb(0.8, 0.2, 0.2) // Red for OFF
+                });
+            }
+            
+            // Update the button text directly
+            if let Ok(mut text) = atmospheric_fog_text_query.single_mut() {
+                **text = format!(
+                    "ATMOSPHERIC FOG: {}",
+                    if settings.atmospheric_fog_enabled { "ON" } else { "OFF" }
                 );
             }
         }

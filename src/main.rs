@@ -6,6 +6,7 @@ use bevy_vibes::{
     lighting::LightingPlugin,
     world::WorldPlugin,
     atmosphere::AtmospherePlugin,
+    post_processing::PostProcessingPlugin,
     MotionBlur,
 };
 use bevy_vibes::menu::*;
@@ -22,6 +23,7 @@ fn main() {
             CameraPlugin,
             LightingPlugin,
             AtmospherePlugin,
+            PostProcessingPlugin,
         ))
         .add_systems(OnEnter(GameState::InGame), apply_initial_settings)
         .add_systems(Update, (

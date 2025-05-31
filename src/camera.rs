@@ -1,18 +1,65 @@
 use crate::*;
-use crate::menu::GameState;
+use crate::menu::{GameState, GameSettings};
 use crate::car::{Car, CameraTarget};
+use crate::world::GameEntity;
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(OnEnter(GameState::InGame), setup_camera_state)
-            .add_systems(Update, camera_follow_system.run_if(in_state(GameState::InGame)));
+            .add_systems(Update, (camera_follow_system, manage_camera_effects).run_if(in_state(GameState::InGame)));
     }
 }
 
-fn setup_camera_state(mut commands: Commands) {
+fn setup_camera_state(mut commands: Commands, settings: Res<GameSettings>) {
     commands.insert_resource(CameraState::default());
+    
+    // Spawn the comprehensive camera with all effects
+    commands.spawn((
+        Camera3d::default(),
+        // HDR is required for atmospheric scattering and better lighting
+        Camera {
+            hdr: true,
+            ..default()
+        },
+        Transform::from_xyz(0.0, 5.5, 8.0).looking_at(Vec3::ZERO, Vec3::Y),
+        // Note: Don't add CameraTarget to camera - that's for the car
+        // Atmospheric fog for immersive racing experience (balanced)
+        DistanceFog {
+            color: if settings.atmospheric_fog_enabled {
+                Color::srgba(0.3, 0.4, 0.5, 0.6) // Increased intensity but not overwhelming 
+            } else {
+                Color::srgba(0.3, 0.4, 0.5, 0.0) // Disabled fog
+            },
+            directional_light_color: Color::srgba(1.0, 0.95, 0.85, 0.3), // Slightly more sun influence  
+            directional_light_exponent: 20.0, // Balanced exponent
+            falloff: FogFalloff::from_visibility_colors(
+                50.0, // Balanced visibility distance (between 25 and 80)
+                Color::srgb(0.25, 0.3, 0.4), // More noticeable extinction color
+                Color::srgb(0.85, 0.88, 0.92), // Slight blue tint inscattering
+            ),
+        },
+        // Motion blur for realistic speed effects
+        MotionBlur {
+            shutter_angle: if settings.motion_blur_enabled { 0.5 } else { 0.0 }, // Moderate motion blur
+            samples: 4, // Good quality
+        },
+        // Atmospheric scattering for realistic sky
+        Atmosphere::EARTH,
+        AtmosphereSettings {
+            aerial_view_lut_max_distance: 50000.0, // Scaled for our scene
+            scene_units_to_m: 1.0, // Our units are meters
+            ..Default::default()
+        },
+        // Proper exposure for atmospheric scattering
+        Exposure::SUNLIGHT,
+        // Tone mapping for realistic colors
+        Tonemapping::AcesFitted,
+        // Bloom for realistic lighting
+        Bloom::NATURAL,
+        GameEntity,
+    ));
 }
 
 #[derive(Resource, Default)]
@@ -87,6 +134,31 @@ fn camera_follow_system(
             
             let look_target = car_pos + Vec3::Y * 1.0 + look_ahead;
             camera_transform.look_at(look_target, Vec3::Y);
+        }
+    }
+}
+
+fn manage_camera_effects(
+    settings: Res<GameSettings>,
+    mut fog_query: Query<&mut DistanceFog, With<Camera3d>>,
+    mut motion_blur_query: Query<&mut MotionBlur, With<Camera3d>>,
+) {
+    // Update atmospheric fog
+    for mut fog in fog_query.iter_mut() {
+        // Enable/disable fog with balanced intensity
+        if settings.atmospheric_fog_enabled {
+            fog.color.set_alpha(0.4); // Balanced fog visibility
+        } else {
+            fog.color.set_alpha(0.0); // Disable fog
+        }
+    }
+    
+    // Update motion blur
+    for mut motion_blur in motion_blur_query.iter_mut() {
+        if settings.motion_blur_enabled {
+            motion_blur.shutter_angle = 0.5; // Enable motion blur
+        } else {
+            motion_blur.shutter_angle = 0.0; // Disable motion blur
         }
     }
 } 
