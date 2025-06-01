@@ -1,5 +1,5 @@
 use crate::*;
-use crate::car::{Car, CameraTarget, Wheel};
+use crate::car::{Car, CameraTarget, Wheel, FrontWheel};
 use crate::menu::GameState;
 use crate::post_processing::RacingPostProcessSettings;
 use bevy_rapier3d::prelude::*;
@@ -102,7 +102,7 @@ fn spawn_car(
     let car_entity = commands
         .spawn((
             // Start with just the transform and physics - no visual model yet
-            Transform::from_xyz(0.0, 0.5, 0.0), // Position so collider bottom touches ground (0.5 - 0.5 = 0.0)
+            Transform::from_xyz(0.0, 0.7, 0.0), // Raised higher to account for GLB model height
             Visibility::default(), // Add visibility component to prevent warnings
             Car::default(),
             CameraTarget,
@@ -110,23 +110,23 @@ fn spawn_car(
             GameEntity, // Mark for cleanup
         ))
         .insert((
-            // Physics components - use appropriate collider for a car
+            // Physics components - BMW M-series sedan properties
             RigidBody::Dynamic,
-            Collider::cuboid(0.7, 0.5, 1.2), // Car collision box - made slightly taller (0.4 -> 0.5)
-            AdditionalMassProperties::Mass(500.0), // Reduced mass for better responsiveness
+            Collider::cuboid(0.95, 0.7, 2.4), // BMW M-series dimensions: ~1.9m wide, 1.4m tall, 4.8m long
+            AdditionalMassProperties::Mass(800.0), // Reduced mass for better game responsiveness
             ExternalForce::default(),
             ExternalImpulse::default(),
             Velocity::default(),
-            Friction::coefficient(2.0), // Increased from 1.2 to reduce skidding
-            Restitution::coefficient(0.1), // Low bounce
-            Damping { linear_damping: 1.0, angular_damping: 2.0 }, // Increased damping to reduce skidding
-            LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z, // Prevent car from flipping
+            Friction::coefficient(3.5), // Much higher friction to prevent skidding
+            Restitution::coefficient(0.02), // Very minimal bounce
+            Damping { linear_damping: 0.1, angular_damping: 1.0 }, // Lower damping for better responsiveness
+            LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z, // Prevent flipping
         ))
         .with_children(|parent| {
             // Add the GLB model as a child with offset to align with physics collider
             parent.spawn((
                 SceneRoot(car_scene),
-                Transform::from_xyz(0.0, -0.5, 0.0), // Move model down to align with collider
+                Transform::from_xyz(0.0, -0.7, 0.0), // Move model down to align with collider
             ));
 
             // Add headlights to the car
@@ -213,7 +213,14 @@ fn mark_wheels_recursive(
                 || name_str == "wheel-front-right" {
                 // Mark this entity as a wheel
                 commands.entity(entity).insert(Wheel);
-                println!("Found and marked wheel: {}", name_str);
+                
+                // Also mark front wheels for steering
+                if name_str == "wheel-front-left" || name_str == "wheel-front-right" {
+                    commands.entity(entity).insert(FrontWheel);
+                    println!("Found and marked front wheel: {}", name_str);
+                } else {
+                    println!("Found and marked rear wheel: {}", name_str);
+                }
             }
         }
 
